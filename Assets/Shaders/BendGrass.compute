@@ -1,0 +1,42 @@
+#pragma kernel BendGrass
+#pragma kernel ResetGrass
+
+float  _DisturberRadius;
+float3 _LocalDisturberPosition;
+float2 _InvDimensions;
+float3 _Extents;
+
+RWTexture2D<float2> _BendMap;
+
+float2 packDirection(float2 direction) {
+    return (direction + float2(1.0f, 1.0f)) * 0.5f;
+}
+
+float2 unpackDirection(float2 direction) {
+    return (direction - float2(0.5f, 0.5f)) * 2.0f;
+}
+
+[numthreads(8,8,1)]
+void BendGrass(uint3 DTid : SV_DispatchThreadID)
+{
+    const float2 uv = float2(DTid.xy) * _InvDimensions;
+    const float2 currentLocalPosition = float2(uv.x - 0.5f, uv.y - 0.5) * 2.0f * _Extents.xz;
+    const float3 direction = _LocalDisturberPosition - float3(currentLocalPosition.x, 0, currentLocalPosition.y);
+    const float  distance = length(direction);
+
+    if (distance < _DisturberRadius) {
+        const float2 lastBend = unpackDirection(_BendMap[DTid.xy]);
+
+        const float  bendInfluence = 1.0f - length(lastBend);
+        const float  bendFactor    = saturate((_DisturberRadius - distance) / _DisturberRadius);
+        const float2 bendDirection = -normalize(float2(direction.x, direction.z + 0.001f));
+
+        _BendMap[DTid.xy] = packDirection(lerp(lastBend, bendDirection, bendFactor * bendInfluence));
+    }
+}
+
+[numthreads(8,8,1)]
+void ResetGrass(uint3 DTid : SV_DispatchThreadID)
+{
+   _BendMap[DTid.xy] = packDirection(float2(0, 0));
+}

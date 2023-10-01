@@ -1,0 +1,20 @@
+#pragma kernel CSMain
+#include "InstanceData.cginc"
+
+RWStructuredBuffer<int> _visibilityBuffer;
+RWStructuredBuffer<int> _scanIndicesBuffer;
+RWStructuredBuffer<int> _scanOffsetsBuffer;
+RWStructuredBuffer<GrassInstanceData> _generatedGrassInstances;
+RWStructuredBuffer<GrassInstanceData> _reducedGrassInstances;
+
+[numthreads(64, 1, 1)]
+void CSMain (uint3 DTid : SV_DispatchThreadID, uint3 Gid : SV_GroupID, uint GI : SV_GroupIndex)
+{
+    const int instanceId = DTid.x;
+    const int offsetId = Gid.x;
+    const int index = _scanOffsetsBuffer[offsetId] + _scanIndicesBuffer[instanceId];
+    
+    if (_visibilityBuffer[instanceId] != 0) {
+        _reducedGrassInstances[index] = _generatedGrassInstances[instanceId];
+    }
+}

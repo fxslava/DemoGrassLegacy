@@ -1,0 +1,78 @@
+#pragma kernel CSMain
+
+#pragma multi_compile _ LOD_PREFIXES_PASS
+
+#define GROUP_SIZE 512
+
+int _numInstances;
+int _lodId;
+RWStructuredBuffer<int> _lodBuffer;
+RWStructuredBuffer<int> _groupSumBufferIn;
+RWStructuredBuffer<int> _groupSumBufferOut;
+RWStructuredBuffer<int> _indicesBuffer;
+RWStructuredBuffer<int> _argsBuffer;
+
+groupshared int sharedIntermediateSums[2 * GROUP_SIZE];
+
+[numthreads(GROUP_SIZE, 1, 1)]
+void CSMain(uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID, uint3 Gid : SV_GroupID)
+{
+    int offset = 1;
+#if defined(LOD_PREFIXES_PASS)
+    sharedIntermediateSums[2 * GTid.x] = (_lodBuffer[2 * DTid.x] == _lodId) ? 1 : 0;
+    sharedIntermediateSums[2 * GTid.x + 1] = (_lodBuffer[2 * DTid.x + 1] == _lodId) ? 1 : 0;
+#else
+    sharedIntermediateSums[2 * GTid.x] = _groupSumBufferIn[2 * DTid.x];
+    sharedIntermediateSums[2 * GTid.x + 1] = _groupSumBufferIn[2 * DTid.x + 1];
+#endif
+    
+    int d;
+    const int NoofElements = 2 * GROUP_SIZE;
+
+    //perform reduction
+    for (d = NoofElements >> 1; d > 0; d >>= 1)
+    {
+        GroupMemoryBarrierWithGroupSync();
+
+        if (GTid.x < d)
+        {
+            int ai = offset * (2 * GTid.x + 1) - 1;
+            int bi = offset * (2 * GTid.x + 2) - 1;
+            sharedIntermediateSums[bi] += sharedIntermediateSums[ai];
+        }
+        offset *= 2;
+    }
+
+    // clear the last element
+    if (GTid.x == 0)
+    {
+#if defined(LOD_PREFIXES_PASS)
+        _groupSumBufferOut[Gid.x] = sharedIntermediateSums[NoofElements - 1];
+#else
+        _argsBuffer[1] = sharedIntermediateSums[NoofElements - 1];
+#endif
+        sharedIntermediateSums[NoofElements - 1] = 0;
+    }
+
+    //perform downsweep and build scan
+    for (d = 1; d < NoofElements; d *= 2)
+    {
+        offset >>= 1;
+
+        GroupMemoryBarrierWithGroupSync();
+
+        if (GTid.x < d)
+        {
+            int ai = offset * (2 * GTid.x + 1) - 1;
+            int bi = offset * (2 * GTid.x + 2) - 1;
+            int t = sharedIntermediateSums[ai];
+            sharedIntermediateSums[ai] = sharedIntermediateSums[bi];
+            sharedIntermediateSums[bi] += t;
+        }
+    }
+
+    GroupMemoryBarrierWithGroupSync();
+
+    _indicesBuffer[2 * DTid.x] = sharedIntermediateSums[2 * GTid.x];
+    _indicesBuffer[2 * DTid.x + 1] = sharedIntermediateSums[2 * GTid.x + 1];
+}
