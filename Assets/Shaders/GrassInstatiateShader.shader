@@ -26,6 +26,7 @@ Shader "Unlit/GrassInstatiateShader"
             #pragma fragment frag
             // make fog work
             #pragma multi_compile_fog
+            #pragma multi_compile _ DEBUG
 
             #include "UnityCG.cginc"
             #include "InstanceData.cginc"
@@ -46,7 +47,10 @@ Shader "Unlit/GrassInstatiateShader"
             float _GrassDepthAmbient;
             float4 _GrassAmbientColor;
             StructuredBuffer<GrassInstanceData> _Properties;
+
+#if defined(DEBUG)
             StructuredBuffer<int> visibilityBuffer;
+#endif
 
             sampler2D _BendGrassTex;
             float3 _bendMapOrigin;
@@ -127,7 +131,6 @@ Shader "Unlit/GrassInstatiateShader"
                 v2f o;
 
                 float ambient = saturate((length(v.vertex.y) - _GrassDepthAmbient) / _GrassDepthAmbient);
-                bool isVisible = visibilityBuffer[instanceID] != 0;
                 float4 pos = mul(_Properties[instanceID].mat, v.vertex);
 
                 float3 pivot = mul(_Properties[instanceID].mat, float4(0,0,0,1)).xyz;
@@ -145,6 +148,11 @@ Shader "Unlit/GrassInstatiateShader"
                 pos.xyz = WindGrassVertex(pos.xyz, pivot, windDir * wind);
 
                 o.vertex = UnityObjectToClipPos(pos);
+
+                bool isVisible = true; 
+#if defined(DEBUG)
+                isVisible = visibilityBuffer[instanceID] != 0;
+#endif
                 o.color = isVisible ? lerp(_GrassAmbientColor * _Properties[instanceID].color, _Properties[instanceID].color, ambient) : float4(0,0,0, 1.0f);
 
                 UNITY_TRANSFER_FOG(o,o.vertex);

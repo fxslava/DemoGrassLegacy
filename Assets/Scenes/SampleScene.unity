@@ -563,7 +563,7 @@ MonoBehaviour:
   mainCamera: {fileID: 963194227}
   material: {fileID: 2100000, guid: 7f5b32ec9811636498f2428a76f0bb03, type: 2}
   grassMesh: {fileID: 3906130615805142554, guid: 93d3a7468bb921c479b4d42b62b1cbfb, type: 3}
-  count: {x: 400, y: 400}
+  count: {x: 512, y: 512}
   spacing: {x: 0.075, y: 0.075}
   baseColor: {r: 0, g: 0.2830189, b: 0, a: 0}
   tintColor: {r: 0.013561718, g: 0.084905684, b: 0, a: 0}

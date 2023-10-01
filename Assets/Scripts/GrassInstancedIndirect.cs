@@ -18,12 +18,14 @@ public class GrassInstancedIndirect : MonoBehaviour
 
     private Bounds _bounds;
     private int _numInstances = 0;
+    private int _numGroups = 0;
     private ComputeBuffer _grassGeneratedInstancesBuffer;
     private ComputeBuffer _grassSortedLODsInstancesBuffer;
     private ComputeBuffer _grassInstancesBBoxesBuffer;
     private ComputeBuffer _grassInstancesVisibilityBuffer;
     private ComputeBuffer _argsBuffer;
     private ComputeBuffer _scanIndicesBuffer;
+    private ComputeBuffer _scanTempSumBuffer;
     private ComputeBuffer _scanOffsetsBuffer;
     private int _generateGrassInstancesKernelId = -1;
     private int _grassInstancesVisibilityKernelId = -1;
@@ -59,6 +61,7 @@ public class GrassInstancedIndirect : MonoBehaviour
     private void InitializeBuffers()
     {
         _numInstances = count.x * count.y;
+        _numGroups = (_numInstances + SCAN_GROUP_SIZE - 1) / SCAN_GROUP_SIZE;
 
         uint[] args = new uint[5] { 0, 0, 0, 0, 0 };
         args[0] = grassMesh.GetIndexCount(0);
@@ -70,25 +73,22 @@ public class GrassInstancedIndirect : MonoBehaviour
         _argsBuffer.SetData(args);
 
         _grassGeneratedInstancesBuffer = new ComputeBuffer(_numInstances, GrassInstanceProperties.Size());
-        _grassSortedLODsInstancesBuffer = new ComputeBuffer(_numInstances, GrassInstanceProperties.Size());
         _grassInstancesBBoxesBuffer = new ComputeBuffer(_numInstances, GrassInstanceBBox.Size());
-        _grassInstancesVisibilityBuffer = new ComputeBuffer(_numInstances, sizeof(int), ComputeBufferType.Default);
+        _grassSortedLODsInstancesBuffer = new ComputeBuffer(_numInstances, GrassInstanceProperties.Size());
+        _grassInstancesVisibilityBuffer = new ComputeBuffer(_numInstances, sizeof(int));
         _scanIndicesBuffer = new ComputeBuffer(_numInstances, sizeof(int));
-        _scanOffsetsBuffer = new ComputeBuffer(_numInstances / SCAN_GROUP_SIZE, sizeof(int));
+        _scanTempSumBuffer = new ComputeBuffer(_numGroups, sizeof(int));
+        _scanOffsetsBuffer = new ComputeBuffer(_numGroups, sizeof(int));
 
         _bounds = new Bounds(transform.position, new Vector3(count.x * spacing.x, 0, spacing.y * count.y) + grassMesh.bounds.extents);
-
-        material.SetBuffer("_Properties", _grassGeneratedInstancesBuffer);
-        material.SetBuffer("visibilityBuffer", _grassInstancesVisibilityBuffer);
-        material.SetVector("_bendMapOrigin", transform.position);
-        material.SetVector("_bendMapInvExtents", new Vector3(1.0f/_bounds.extents.x, 1.0f / _bounds.extents.y, 1.0f / _bounds.extents.z));
     }
 
     private void InitializeShaders()
     {
         _generateGrassInstancesKernelId = _generateGrassInstancesCS.FindKernel("CSMain");
         _grassInstancesVisibilityKernelId = _grassInstancesVisibilityCS.FindKernel("CSMain");
-        _grassInstancesVisibilityCS.EnableKeyword("BBOX_CULL_MODE");
+        _grassInstancesVisibilityCS.EnableKeyword("NAIVE_BBOX_CULL_MODE");
+        _grassInstancesVisibilityCS.DisableKeyword("BBOX_CULL_MODE");
         _scanInstancesKernelId = _scanInstancesCS.FindKernel("CSMain");
         _copyInstancesKernelId = _copyInstancesCS.FindKernel("CSMain");
     }
@@ -137,26 +137,36 @@ public class GrassInstancedIndirect : MonoBehaviour
         _grassInstancesVisibilityCS.Dispatch(_grassInstancesVisibilityKernelId, _kernelGridDimX, 1, 1);
     }
 
-    private void CopyVisibleDistancesWithLOD(int lod = 0)
+    private void CopyVisibleDistancesWithLOD(int lod = 1)
     {
         // scan
-        _scanInstancesCS.SetBuffer(_scanInstancesKernelId, "_visibilityBuffer", _grassInstancesVisibilityBuffer);
+        _scanInstancesCS.EnableKeyword("LOD_PREFIXES_PASS");
+        _scanInstancesCS.SetBuffer(_scanInstancesKernelId, "_lodBuffer", _grassInstancesVisibilityBuffer);
         _scanInstancesCS.SetBuffer(_scanInstancesKernelId, "_indicesBuffer", _scanIndicesBuffer);
-        _scanInstancesCS.SetBuffer(_scanInstancesKernelId, "_offsetsBuffer", _scanOffsetsBuffer);
-        _scanInstancesCS.SetInt("_numInstances", _numInstances);
+        _scanInstancesCS.SetBuffer(_scanInstancesKernelId, "_groupSumBufferOut", _scanTempSumBuffer);
+        _scanInstancesCS.SetInt("_lodId", lod);
 
         uint _kernelGroupDimX = 0, _kernelGroupDimY = 0, _kernelGroupDimZ = 0;
         _scanInstancesCS.GetKernelThreadGroupSizes(_scanInstancesKernelId, out _kernelGroupDimX, out _kernelGroupDimY, out _kernelGroupDimZ);
 
-        int _kernelGridDimX = (int)((_numInstances + (_kernelGroupDimX - 1)) / _kernelGroupDimX);
+        int _kernelGridDimX = (_numInstances + (SCAN_GROUP_SIZE - 1)) / SCAN_GROUP_SIZE;
+        _scanInstancesCS.Dispatch(_scanInstancesKernelId, _kernelGridDimX, 1, 1);
+
+        // final scan
+        _scanInstancesCS.DisableKeyword("LOD_PREFIXES_PASS");
+        _scanInstancesCS.SetBuffer(_scanInstancesKernelId, "_groupSumBufferIn", _scanTempSumBuffer);
+        _scanInstancesCS.SetBuffer(_scanInstancesKernelId, "_indicesBuffer", _scanOffsetsBuffer);
+        _scanInstancesCS.SetBuffer(_scanInstancesKernelId, "_argsBuffer", _argsBuffer);
+
+        _kernelGridDimX = (int)((_numGroups + (SCAN_GROUP_SIZE - 1)) / SCAN_GROUP_SIZE);
         _scanInstancesCS.Dispatch(_scanInstancesKernelId, _kernelGridDimX, 1, 1);
 
         //copy
-        _scanInstancesCS.SetBuffer(_scanInstancesKernelId, "_visibilityBuffer", _grassInstancesVisibilityBuffer);
-        _scanInstancesCS.SetBuffer(_scanInstancesKernelId, "_scanIndicesBuffer", _scanIndicesBuffer);
-        _scanInstancesCS.SetBuffer(_scanInstancesKernelId, "_scanOffsetsBuffer", _scanOffsetsBuffer);
-        _scanInstancesCS.SetBuffer(_scanInstancesKernelId, "_generatedGrassInstances", _grassGeneratedInstancesBuffer);
-        _scanInstancesCS.SetBuffer(_scanInstancesKernelId, "_reducedGrassInstances", _grassSortedLODsInstancesBuffer);
+        _copyInstancesCS.SetBuffer(_scanInstancesKernelId, "_visibilityBuffer", _grassInstancesVisibilityBuffer);
+        _copyInstancesCS.SetBuffer(_scanInstancesKernelId, "_scanIndicesBuffer", _scanIndicesBuffer);
+        _copyInstancesCS.SetBuffer(_scanInstancesKernelId, "_scanOffsetsBuffer", _scanOffsetsBuffer);
+        _copyInstancesCS.SetBuffer(_scanInstancesKernelId, "_generatedGrassInstances", _grassGeneratedInstancesBuffer);
+        _copyInstancesCS.SetBuffer(_scanInstancesKernelId, "_reducedGrassInstances", _grassSortedLODsInstancesBuffer);
 
         _copyInstancesCS.GetKernelThreadGroupSizes(_copyInstancesKernelId, out _kernelGroupDimX, out _kernelGroupDimY, out _kernelGroupDimZ);
 
@@ -187,7 +197,22 @@ public class GrassInstancedIndirect : MonoBehaviour
     private void Update()
     {
         CalculateGrassVisibility();
-        //CopyVisibleDistancesWithLOD();
+
+        if (false)
+        {
+            material.EnableKeyword("DEBUG");
+            material.SetBuffer("_Properties", _grassGeneratedInstancesBuffer);
+            material.SetBuffer("visibilityBuffer", _grassInstancesVisibilityBuffer);
+        } else
+        {
+            CopyVisibleDistancesWithLOD();
+            material.DisableKeyword("DEBUG");
+            material.SetBuffer("_Properties", _grassSortedLODsInstancesBuffer);
+        }
+
+        material.SetVector("_bendMapOrigin", transform.position);
+        material.SetVector("_bendMapInvExtents", new Vector3(1.0f / _bounds.extents.x, 1.0f / _bounds.extents.y, 1.0f / _bounds.extents.z));
+
         Graphics.DrawMeshInstancedIndirect(grassMesh, 0, material, _bounds, _argsBuffer);
     }
 
@@ -221,6 +246,11 @@ public class GrassInstancedIndirect : MonoBehaviour
         if (_scanIndicesBuffer != null) {
             _scanIndicesBuffer.Release();
             _scanIndicesBuffer = null;
+        }
+
+        if (_scanTempSumBuffer != null) {
+            _scanTempSumBuffer.Release();
+            _scanTempSumBuffer = null;
         }
 
         if (_scanOffsetsBuffer != null) {

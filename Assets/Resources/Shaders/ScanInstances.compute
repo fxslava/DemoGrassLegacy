@@ -4,7 +4,6 @@
 
 #define GROUP_SIZE 512
 
-int _numInstances;
 int _lodId;
 RWStructuredBuffer<int> _lodBuffer;
 RWStructuredBuffer<int> _groupSumBufferIn;
