@@ -2,7 +2,6 @@ using UnityEngine;
 
 public class BendGrassManager : MonoBehaviour
 {
-    [SerializeField] public Material grassMaterial;
     [SerializeField] public Vector2Int bentGrassMapResolution = new Vector2Int(256, 256);
 
     [SerializeField] private BendGrassVolume _grassVolume;
@@ -49,11 +48,6 @@ public class BendGrassManager : MonoBehaviour
     void Update()
     {
         _bounds = _grassVolume.GetBounds();
-
-        grassMaterial.SetTexture("_BendGrassTex", _bendGrassTex2D);
-        grassMaterial.SetVector("_bendMapOrigin", _bounds.center);
-        grassMaterial.SetVector("_bendMapInvExtents", new Vector3(1.0f / _bounds.extents.x, 1.0f / _bounds.extents.y, 1.0f / _bounds.extents.z));
-
         _bendGrassComputeShader.SetTexture(_resetGrassKernelIndex, "_BendMap", _bendGrassTex2D);
 
         if (_firstUpdate)
@@ -72,5 +66,20 @@ public class BendGrassManager : MonoBehaviour
         _bendGrassComputeShader.SetTexture(_bentGrassKernelIndex, "_BendMap", _bendGrassTex2D);
 
         _bendGrassComputeShader.Dispatch(_bentGrassKernelIndex, _threadGroupX, _threadGroupY, _threadGroupZ);
+    }
+
+    public RenderTexture GetBendMap()
+    {
+        return _bendGrassTex2D;
+    }
+
+    public Vector3 GetBendMapOrigin()
+    {
+        return _bounds.center;
+    }
+
+    public Vector3 GetBendMapInvExtents()
+    {
+        return new Vector3(1.0f / _bounds.extents.x, 1.0f / _bounds.extents.y, 1.0f / _bounds.extents.z);
     }
 }

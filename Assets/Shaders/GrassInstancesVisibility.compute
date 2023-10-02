@@ -6,6 +6,11 @@
 float4x4 _UNITY_MATRIX_MVP;
 int _numInstances;
 
+float3 _cameraPos;
+float _DistanceLOD0;
+float _DistanceLOD1;
+float _DistanceLOD2;
+
 RWStructuredBuffer<BBox> bBoxes;
 RWStructuredBuffer<int>  visibilityBuffer;
 
@@ -35,8 +40,7 @@ void CSMain (uint3 id : SV_DispatchThreadID)
     if (id.x < (uint)_numInstances)
     {
         BBox bbox = bBoxes[id.x];
-
-        // Check if the instance is visible
+        
         float3 minPos = bbox.center - bbox.extents;
         float3 maxPos = bbox.center + bbox.extents;
 
@@ -78,7 +82,25 @@ void CSMain (uint3 id : SV_DispatchThreadID)
         
         isInFrustum = IsAABBIntersects(float3(-1.0f, -1.0f, 0.0f), float3(1.0, 1.0, 1.0f), screenMinPos, screenMaxPos);
 #endif
-    
-        visibilityBuffer[id.x] = isInFrustum;
+        
+        float distance = length(_cameraPos - bbox.center);
+        int lod = -1;
+        if (isInFrustum == 1)
+        {
+            if (distance < _DistanceLOD0) {
+                lod = 0;
+            }
+            else if (distance < _DistanceLOD1) {
+                lod = 1;
+            }
+            else if (distance < _DistanceLOD2) {
+                lod = 2;
+            }
+            else {
+                lod = 3;
+            }
+        }
+        
+        visibilityBuffer[id.x] = lod;
     }
 }

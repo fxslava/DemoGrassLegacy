@@ -6,6 +6,7 @@ RWStructuredBuffer<int> _scanIndicesBuffer;
 RWStructuredBuffer<int> _scanOffsetsBuffer;
 RWStructuredBuffer<GrassInstanceData> _generatedGrassInstances;
 RWStructuredBuffer<GrassInstanceData> _reducedGrassInstances;
+int _lodId;
 
 [numthreads(1024, 1, 1)]
 void CSMain (uint3 DTid : SV_DispatchThreadID, uint3 Gid : SV_GroupID, uint GI : SV_GroupIndex)
@@ -14,7 +15,8 @@ void CSMain (uint3 DTid : SV_DispatchThreadID, uint3 Gid : SV_GroupID, uint GI :
     const int offsetId = Gid.x;
     const int index = _scanOffsetsBuffer[offsetId] + _scanIndicesBuffer[instanceId];
     
-    if (_visibilityBuffer[instanceId] == 1) {
+    if (_visibilityBuffer[instanceId] == _lodId)
+    {
         _reducedGrassInstances[index] = _generatedGrassInstances[instanceId];
     }
 }

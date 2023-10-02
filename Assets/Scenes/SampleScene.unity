@@ -561,12 +561,20 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   mainCamera: {fileID: 963194227}
-  material: {fileID: 2100000, guid: 7f5b32ec9811636498f2428a76f0bb03, type: 2}
   grassMesh: {fileID: 3906130615805142554, guid: 93d3a7468bb921c479b4d42b62b1cbfb, type: 3}
   count: {x: 512, y: 512}
   spacing: {x: 0.075, y: 0.075}
   baseColor: {r: 0, g: 0.2830189, b: 0, a: 0}
   tintColor: {r: 0.013561718, g: 0.084905684, b: 0, a: 0}
+  lodDistance:
+  - 10
+  - 20
+  - 30
+  material:
+  - {fileID: 2100000, guid: 7f5b32ec9811636498f2428a76f0bb03, type: 2}
+  - {fileID: 2100000, guid: 5230961dfa420d4489eb8b4caa5551b4, type: 2}
+  - {fileID: 2100000, guid: da822800e5af0ac489f9ceccc078d284, type: 2}
+  - {fileID: 2100000, guid: 7cce71272aee03d4dbe5b71348b146b9, type: 2}
   _generateGrassInstancesCS: {fileID: 7200000, guid: faace363d7c2b0c41b40d0eb02d9b1cc, type: 3}
   _grassInstancesVisibilityCS: {fileID: 7200000, guid: 3a7092f3cd0d7364d9b746fdf37362f7, type: 3}
   _scanInstancesCS: {fileID: 7200000, guid: 568c1b3dcb9919e488dcab224672c690, type: 3}
