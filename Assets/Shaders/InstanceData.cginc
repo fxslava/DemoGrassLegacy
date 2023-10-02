@@ -5,7 +5,9 @@
 struct BBox
 {
     float3 center;
+    float padding;
     float3 extents;
+    float bayerThreashold;
 };
 
 struct GrassInstanceData

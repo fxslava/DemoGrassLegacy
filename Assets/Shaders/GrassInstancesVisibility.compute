@@ -10,6 +10,7 @@ float3 _cameraPos;
 float _DistanceLOD0;
 float _DistanceLOD1;
 float _DistanceLOD2;
+float _DistanceLOD3;
 
 RWStructuredBuffer<BBox> bBoxes;
 RWStructuredBuffer<int>  visibilityBuffer;
@@ -97,7 +98,8 @@ void CSMain (uint3 id : SV_DispatchThreadID)
                 lod = 2;
             }
             else {
-                lod = 3;
+                float distanceFade = 1.0f - saturate((distance - _DistanceLOD2) / (_DistanceLOD3 - _DistanceLOD2));
+                lod = (bbox.bayerThreashold < distanceFade) ? 3 : -1;
             }
         }
         

@@ -12,11 +12,12 @@ float2 _spacing;
 
 RWStructuredBuffer<GrassInstanceData> _grassInstances;
 RWStructuredBuffer<BBox> _bBoxes;
+RWStructuredBuffer<float> _bayerMatrix;
 
 [numthreads(8,8,1)]
-void CSMain(uint3 DTid : SV_DispatchThreadID)
+void CSMain(uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID)
 {
-    int instanceId = DTid.x + DTid.y * _gridDimensions.x;
+    const int instanceId = DTid.x + DTid.y * _gridDimensions.x;
 
     float3 position = float3(DTid.x * _spacing.x, 0, DTid.y * _spacing.y) + _origin;
     float3 normal   = float3(0, 1.0f, 0);
@@ -40,4 +41,6 @@ void CSMain(uint3 DTid : SV_DispatchThreadID)
     
     _bBoxes[instanceId].center = position + _instanceBBoxCenter;
     _bBoxes[instanceId].extents = _instanceBBoxExtents;
+    _bBoxes[instanceId].bayerThreashold = _bayerMatrix[GTid.x + GTid.y * 8];
+
 }

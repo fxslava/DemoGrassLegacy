@@ -146,7 +146,7 @@ Shader "Unlit/GrassInstatiateShader"
 
                 o.vertex = UnityObjectToClipPos(pos);
 
-                o.color = lerp(_GrassAmbientColor * _Properties[instanceID].color, 0.5f * _Properties[instanceID].color + 0.5f * _GrassColor, ambient);
+                o.color = lerp(_GrassAmbientColor * _Properties[instanceID].color, 0.8f * _Properties[instanceID].color + 0.2f * _GrassColor, ambient);
 
                 UNITY_TRANSFER_FOG(o,o.vertex);
                 return o;

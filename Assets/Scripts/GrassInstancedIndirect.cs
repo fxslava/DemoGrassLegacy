@@ -31,11 +31,22 @@ public class GrassInstancedIndirect : MonoBehaviour
     private ComputeBuffer _scanIndicesBuffer;
     private ComputeBuffer _scanTempSumBuffer;
     private ComputeBuffer _scanOffsetsBuffer;
+    private ComputeBuffer _bayerMatrixBuffer;
     private int _generateGrassInstancesKernelId = -1;
     private int _grassInstancesVisibilityKernelId = -1;
     private int _scanInstancesKernelId = -1;
     private int _copyInstancesKernelId = -1;
     private BendGrassManager bendManager = null;
+
+    int[] _bayerMatrix = {
+            0, 48,12,60,3, 51,15,63,
+            32,16,44,28,35,19,47,31,
+            8, 56,4, 52,11,59,7, 55,
+            40,24,36,20,43,27,39,23,
+            2, 50,14,62,1, 49,13,61,
+            34,18,46,30,33,17,45,29,
+            10,58,6, 54,9, 57,5, 53,
+            42,26,38,22,41,25,37,21 };
 
     private struct GrassInstanceProperties
     {
@@ -53,13 +64,15 @@ public class GrassInstancedIndirect : MonoBehaviour
     private struct GrassInstanceBBox
     {
         public Vector3 center;
+        public float padding;
         public Vector3 extents;
+        public float bayerThreashold;
 
         public static int Size()
         {
             return
-                sizeof(float) * 3 +
-                sizeof(float) * 3;
+                sizeof(float) * 4 +
+                sizeof(float) * 4;
         }
     }
 
@@ -91,6 +104,14 @@ public class GrassInstancedIndirect : MonoBehaviour
         _scanTempSumBuffer = new ComputeBuffer(_numGroups, sizeof(int));
         _scanOffsetsBuffer = new ComputeBuffer(_numGroups, sizeof(int));
 
+        float[] bayerMat = new float[_bayerMatrix.Length];
+        for (int i = 0; i < _bayerMatrix.Length; i++)
+        {
+            bayerMat[i] = _bayerMatrix[i] * (1.0f / 64.0f);
+        }
+        _bayerMatrixBuffer = new ComputeBuffer(_bayerMatrix.Length, sizeof(float));
+        _bayerMatrixBuffer.SetData(bayerMat);
+
         _bounds = new Bounds(transform.position, new Vector3(count.x * spacing.x, 0, spacing.y * count.y) + grassMesh.bounds.extents);
     }
 
@@ -108,6 +129,7 @@ public class GrassInstancedIndirect : MonoBehaviour
     {
         Vector3 origin = new Vector3(-0.5f * (spacing.x * count.x), 0.0f, -0.5f * (spacing.y * count.y));
 
+        _generateGrassInstancesCS.SetBuffer(_generateGrassInstancesKernelId, "_bayerMatrix", _bayerMatrixBuffer);
         _generateGrassInstancesCS.SetBuffer(_generateGrassInstancesKernelId, "_grassInstances", _grassGeneratedInstancesBuffer);
         _generateGrassInstancesCS.SetBuffer(_generateGrassInstancesKernelId, "_bBoxes", _grassInstancesBBoxesBuffer);
         _generateGrassInstancesCS.SetVector("_baseColor", baseColor);
@@ -142,6 +164,7 @@ public class GrassInstancedIndirect : MonoBehaviour
         _grassInstancesVisibilityCS.SetFloat("_DistanceLOD0", lodDistance[0]);
         _grassInstancesVisibilityCS.SetFloat("_DistanceLOD1", lodDistance[1]);
         _grassInstancesVisibilityCS.SetFloat("_DistanceLOD2", lodDistance[2]);
+        _grassInstancesVisibilityCS.SetFloat("_DistanceLOD3", lodDistance[3]);
         _grassInstancesVisibilityCS.SetBuffer(_grassInstancesVisibilityKernelId, "bBoxes", _grassInstancesBBoxesBuffer);
         _grassInstancesVisibilityCS.SetBuffer(_grassInstancesVisibilityKernelId, "visibilityBuffer", _grassInstancesVisibilityBuffer);
         _grassInstancesVisibilityCS.SetMatrix("_UNITY_MATRIX_MVP", MVP);
@@ -222,19 +245,19 @@ public class GrassInstancedIndirect : MonoBehaviour
     {
         CalculateGrassVisibility();
 
-        for (int i = 0; i < NUM_LODS; i++)
+        for (int lodId = 0; lodId < NUM_LODS; lodId++)
         {
-            CopyVisibleDistancesWithLOD(i);
-            material[i].SetBuffer("_Properties", _grassSortedLODsInstancesBuffer[i]);
+            CopyVisibleDistancesWithLOD(lodId);
+            material[lodId].SetBuffer("_Properties", _grassSortedLODsInstancesBuffer[lodId]);
 
             if (bendManager != null)
             {
-                material[i].SetTexture("_BendGrassTex", bendManager.GetBendMap());
-                material[i].SetVector("_bendMapOrigin", bendManager.GetBendMapOrigin());
-                material[i].SetVector("_bendMapInvExtents", bendManager.GetBendMapInvExtents());
+                material[lodId].SetTexture("_BendGrassTex", bendManager.GetBendMap());
+                material[lodId].SetVector("_bendMapOrigin", bendManager.GetBendMapOrigin());
+                material[lodId].SetVector("_bendMapInvExtents", bendManager.GetBendMapInvExtents());
             }
 
-            Graphics.DrawMeshInstancedIndirect(grassMesh, 0, material[i], _bounds, _argsBuffer[i]);
+            Graphics.DrawMeshInstancedIndirect(grassMesh, 0, material[lodId], _bounds, _argsBuffer[lodId]);
         }
     }
 
@@ -284,6 +307,11 @@ public class GrassInstancedIndirect : MonoBehaviour
         if (_scanOffsetsBuffer != null) {
             _scanOffsetsBuffer.Release();
             _scanOffsetsBuffer = null;
+        }
+
+        if (_bayerMatrixBuffer != null) {
+            _bayerMatrixBuffer.Release();
+            _bayerMatrixBuffer = null;
         }
     }
 }
