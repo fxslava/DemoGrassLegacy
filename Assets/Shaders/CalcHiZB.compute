@@ -1,0 +1,89 @@
+#pragma kernel BaseDownsample
+#pragma kernel PyramidDownsample
+#pragma use_dxc
+
+int2 _DepthTexResolution;
+int2 _HiZBaseResolution;
+
+RWTexture2D<float> _fullZ;
+RWTexture2D<float> _HiZBase;
+RWTexture2D<float> _HiZmip1;
+RWTexture2D<float> _HiZmip2;
+
+#define TILE_SIZE_X 16
+#define TILE_SIZE_Y 16
+#define MAX_WAVE_SIZE 64
+
+groupshared float temp[MAX_WAVE_SIZE];
+
+[numthreads(TILE_SIZE_X, TILE_SIZE_Y, 1)]
+void BaseDownsample(uint3 DTid : SV_DispatchThreadID, uint GI : SV_GroupIndex, uint3 Gid : SV_GroupID)
+{
+    if (GI < MAX_WAVE_SIZE) {
+        temp[GI] = 1.0f;
+    }
+    
+    GroupMemoryBarrierWithGroupSync();
+    
+    float minZval = 1.0f;
+    if (DTid.x < _DepthTexResolution.x && DTid.y < _DepthTexResolution.y) {
+        minZval = _fullZ.Load(int3(DTid.x, DTid.y, 0));
+    }
+    
+    minZval = WaveActiveMin(minZval);
+    
+    const int laneId = WaveGetLaneIndex();
+    const int waveId = GI / WaveGetLaneCount();
+    
+    if (laneId == 0) {
+        temp[waveId] = minZval;
+    }
+    
+    GroupMemoryBarrierWithGroupSync();
+    
+    if (waveId == 0)
+    {
+        minZval = temp[laneId];
+        minZval = WaveActiveMin(minZval);
+    
+        if (laneId == 0 && Gid.x < _HiZBaseResolution.x && Gid.y < _HiZBaseResolution.y)
+        {
+            _HiZBase[Gid.xy] = minZval;
+        }
+    }
+}
+
+[numthreads(TILE_SIZE_X, TILE_SIZE_Y, 1)]
+void PyramidDownsample(uint3 Gid : SV_GroupID, uint3 GTid : SV_GroupThreadID, uint GI : SV_GroupIndex)
+{    
+    // Make Z-Order
+    uint x = (GI & 1) + ((GI & 4) >> 1) + ((GI & 16) >> 2) + ((GI & 64) >> 3);
+    uint y = ((GI & 2) >> 1) + ((GI & 8) >> 2) + ((GI & 32) >> 3) + ((GI & 128) >> 4);
+    uint2 zDTid = uint2(Gid.x * TILE_SIZE_X + x, Gid.y * TILE_SIZE_X + y);
+    
+    float minZval = 1.0f;
+    
+    if (zDTid.x < _HiZBaseResolution.x && zDTid.y < _HiZBaseResolution.y)
+    {
+        minZval = _HiZBase[zDTid];
+    }
+    
+    const int laneId = WaveGetLaneIndex();
+    minZval = min(WaveReadLaneAt(minZval, laneId ^ 1), minZval);
+    minZval = min(WaveReadLaneAt(minZval, laneId ^ 2), minZval);
+    
+    uint2 mip1uv = uint2(zDTid.x / 2, zDTid.y / 2);
+    if (((zDTid.x % 2) == 0) && ((zDTid.y % 2) == 0) && (mip1uv.x < _HiZBaseResolution.x / 2) && (mip1uv.y < _HiZBaseResolution.y / 2))
+    {
+        _HiZmip1[mip1uv] = minZval;
+    }
+    
+    minZval = min(WaveReadLaneAt(minZval, laneId ^ 4), minZval);
+    minZval = min(WaveReadLaneAt(minZval, laneId ^ 8), minZval);
+    
+    uint2 mip2uv = uint2(zDTid.x / 4, zDTid.y / 4);
+    if (((zDTid.x % 4) == 0) && ((zDTid.y % 4) == 0) && (mip2uv.x < _HiZBaseResolution.x / 4) && (mip2uv.y < _HiZBaseResolution.y / 4))
+    {
+        _HiZmip2[mip2uv] = minZval;
+    }
+}

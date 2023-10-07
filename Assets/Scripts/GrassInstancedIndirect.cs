@@ -231,8 +231,6 @@ public class GrassInstancedIndirect : MonoBehaviour
         bendManager = GetComponent<BendGrassManager>();
     }
 
-    private bool firstUpdate = true;
-
     private void OnPreCull()
     {
     }

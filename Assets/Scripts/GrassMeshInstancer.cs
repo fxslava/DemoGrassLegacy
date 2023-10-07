@@ -77,7 +77,7 @@ public class GrassMeshInstancer : MonoBehaviour
 
     private void Update()
     {
-        if (_numberOfInstances > 0)
+        if (_numberOfInstances > 0 && _argsBuffer != null)
         {
             Graphics.DrawMeshInstancedIndirect(grassMesh, 0, material, _bounds, _argsBuffer);
         }
