@@ -15,7 +15,6 @@ public class HiZBuffer : MonoBehaviour
     private CommandBuffer _commandBuffer;
     private RenderTexture _HiZBFullTexture;
     private RenderTexture _HiZBTexture;
-    private RenderTexture _HiZBTempTexture;
     private CameraEvent _cameraEvent = CameraEvent.AfterForwardOpaque;
     private int _mipCount = 0;
     private int _hiZBkernelId = 0;
@@ -77,17 +76,14 @@ public class HiZBuffer : MonoBehaviour
         };
         _HiZBTexture = new RenderTexture(desc);
         _HiZBTexture.name = "_HiZBTexture";
-
-        _HiZBTempTexture = new RenderTexture(desc);
-        _HiZBTempTexture.name = "_HiZBTempTexture";
     }
 
-    private void HiZBDownsapleStep(CommandBuffer commandBuffer, RenderTexture HZBtex, Vector2Int resolution, int curStep, int curMip)
+    private void HiZBDownsapleStep(RenderTexture HZBtex, Vector2Int resolution, int curStep)
     {
         uint _threadGroupX = 0, _threadGroupY = 0, threadGroupZ;
-        _HiZBufferShaderArray[curStep].SetTexture(_hiZBMipKernelId, "_HiZBase", HZBtex, curMip);
-        _HiZBufferShaderArray[curStep].SetTexture(_hiZBMipKernelId, "_HiZmip1", HZBtex, curMip+1);
-        _HiZBufferShaderArray[curStep].SetTexture(_hiZBMipKernelId, "_HiZmip2", HZBtex, curMip+2);
+        _HiZBufferShaderArray[curStep].SetTexture(_hiZBMipKernelId, "_HiZBase", HZBtex, curStep * 2);
+        _HiZBufferShaderArray[curStep].SetTexture(_hiZBMipKernelId, "_HiZmip1", HZBtex, curStep * 2 + 1);
+        _HiZBufferShaderArray[curStep].SetTexture(_hiZBMipKernelId, "_HiZmip2", HZBtex, curStep * 2 + 2);
         _HiZBufferShaderArray[curStep].SetInts("_HiZBaseResolution", resolution.x, resolution.y);
         _HiZBufferShaderArray[curStep].GetKernelThreadGroupSizes(_hiZBMipKernelId, out _threadGroupX, out _threadGroupY, out threadGroupZ);
         int gridDimX = (resolution.x + (int)_threadGroupX - 1) / (int)_threadGroupX;
@@ -104,6 +100,7 @@ public class HiZBuffer : MonoBehaviour
 
             if (_commandBuffer != null) {
                 _camera.RemoveCommandBuffer(_cameraEvent, _commandBuffer);
+                _commandBuffer = null;
             }
 
             _commandBuffer = new CommandBuffer();
@@ -127,7 +124,7 @@ public class HiZBuffer : MonoBehaviour
             resolution.y = _HiZBTexture.height;
 
             for (int step = 0, processedMips = 0; processedMips < _mipCount - 1; step++, processedMips += 2) {
-                HiZBDownsapleStep(_commandBuffer, _HiZBTexture, resolution, step, step * 2);
+                HiZBDownsapleStep(_HiZBTexture, resolution, step);
                 resolution.x /= 4;
                 resolution.y /= 4;
             }
@@ -154,5 +151,30 @@ public class HiZBuffer : MonoBehaviour
         DebugShowTecxture(_HiZBFullTexture, destination);
 
         _camera.rect = new Rect(0.0f, 0.0f, 1.0f, 1.0f);
+    }
+
+    private void OnDestroy()
+    {
+        
+    }
+
+    public bool IsHiZBufferAvailable()
+    {
+        return _HiZBTexture != null;
+    }
+
+    public int GetMipCount()
+    {
+        return _mipCount;
+    }
+
+    public Vector2Int GetHiZBufferDimensions()
+    {
+        return new Vector2Int(_HiZBTexture.width, _HiZBTexture.height);
+    }
+
+    public RenderTexture GetHiZBuffer()
+    {
+        return _HiZBTexture;
     }
 }

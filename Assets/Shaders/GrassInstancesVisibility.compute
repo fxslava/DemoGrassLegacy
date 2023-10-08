@@ -1,5 +1,5 @@
 #pragma kernel CSMain
-#pragma multi_compile BBOX_CULL_MODE NAIVE_BBOX_CULL_MODE
+#pragma multi_compile _ USE_HiZB
 
 #include "InstanceData.cginc"
 
@@ -15,7 +15,36 @@ float _DistanceLOD3;
 RWStructuredBuffer<BBox> bBoxes;
 RWStructuredBuffer<int>  visibilityBuffer;
 
-inline uint IsVisibleAfterFrustumCulling(float4 clipPos)
+int _HiZMaxMip;
+int2 _HiZTextureSize;
+Texture2D<float> _HiZMap;
+
+// Hi-Z Culling
+inline bool IsVisibleAfterOcclusionCulling(float clipMinX, float clipMaxX, float clipMinY, float clipMaxY, float clipMinZ)
+{
+    const float2 minXY = (float2(clipMinX, clipMinY) * 0.5 + 0.5) * float2(_HiZTextureSize);
+    const float2 maxXY = (float2(clipMaxX, clipMaxY) * 0.5 + 0.5) * float2(_HiZTextureSize);
+    const float2 viewSize = maxXY - minXY;
+    
+    const int LOD = clamp(ceil(log2(max(viewSize.x, viewSize.y) / 2.0f)), 0, _HiZMaxMip);
+    const float scale = exp2(-LOD);
+    const int2 offset = floor(minXY * scale);
+    
+    float minHiZdepth = 1.0f;
+    [unroll]
+    for (int y = 0; y < 2; ++y) {
+        [unroll]
+        for (int x = 0; x < 2; ++x) {
+            int2 uv = clamp(int2(offset.x + x, offset.y + y), int2(0, 0), (_HiZTextureSize - int2(1, 1)) * scale);
+            float hiZdepth = _HiZMap.Load(int3(uv, LOD)).r;
+            minHiZdepth = min(minHiZdepth, hiZdepth);
+        }
+    }
+    
+    return (1.0f - clipMinZ) > minHiZdepth;
+}
+
+inline bool IsVisibleAfterFrustumCulling(float4 clipPos)
 {
     return (clipPos.z >  clipPos.w 
          || clipPos.x < -clipPos.w 
@@ -55,38 +84,38 @@ void CSMain (uint3 id : SV_DispatchThreadID)
         boxCorners[6] = float4(maxPos.x, maxPos.y, minPos.z, 1.0);
         boxCorners[7] = float4(maxPos.x, maxPos.y, maxPos.z, 1.0);
     
-        uint isInFrustum = 0;
-#if defined(NAIVE_BBOX_CULL_MODE)
         float4 clipPos = mul(_UNITY_MATRIX_MVP, boxCorners[0]);
-        isInFrustum = IsVisibleAfterFrustumCulling(clipPos);
+        bool isInFrustum = IsVisibleAfterFrustumCulling(clipPos);
+        
+        clipPos.xyz = clipPos.xyz / clipPos.w;
+        float clipMinX = clipPos.x;
+        float clipMaxX = clipPos.x;
+        float clipMinY = clipPos.y;
+        float clipMaxY = clipPos.y;
+        float clipMinZ = clipPos.z;
         
         [unroll]
         for (int i = 1; i < 8; i++)
         {
             clipPos = mul(_UNITY_MATRIX_MVP, boxCorners[i]);
-            isInFrustum = saturate(isInFrustum + IsVisibleAfterFrustumCulling(clipPos));
-        }
-#elif defined(BBOX_CULL_MODE)
-        float4 corner = mul(_UNITY_MATRIX_MVP, boxCorners[0]);
-        float3 frSpCorner = corner.xyz / corner.w;
-        float3 screenMinPos = frSpCorner;
-        float3 screenMaxPos = frSpCorner;
-        
-        [unroll]
-        for (int i = 1; i < 8; i++)
-        {
-            corner = mul(_UNITY_MATRIX_MVP, boxCorners[i]);
-            frSpCorner = corner.xyz / corner.w;
-            screenMinPos = min(screenMinPos, frSpCorner);
-            screenMaxPos = max(screenMaxPos, frSpCorner);
+            isInFrustum = isInFrustum || IsVisibleAfterFrustumCulling(clipPos);
+            
+            // For HiZ
+            clipPos.xyz = clipPos.xyz / clipPos.w;
+            clipMinX = min(clipPos.x, clipMinX);
+            clipMaxX = max(clipPos.x, clipMaxX);
+            clipMinY = min(clipPos.y, clipMinY);
+            clipMaxY = max(clipPos.y, clipMaxY);
+            clipMinZ = min(clipPos.z, clipMinZ);
         }
         
-        isInFrustum = IsAABBIntersects(float3(-1.0f, -1.0f, 0.0f), float3(1.0, 1.0, 1.0f), screenMinPos, screenMaxPos);
+#if defined(USE_HiZB)
+        isInFrustum = isInFrustum && IsVisibleAfterOcclusionCulling(clipMinX, clipMaxX, clipMinY, clipMaxY, clipMinZ);
 #endif
         
         float distance = length(_cameraPos - bbox.center);
         int lod = -1;
-        if (isInFrustum == 1)
+        if (isInFrustum)
         {
             if (distance < _DistanceLOD0) {
                 lod = 0;

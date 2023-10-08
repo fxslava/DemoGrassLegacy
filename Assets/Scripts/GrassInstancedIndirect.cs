@@ -7,6 +7,7 @@ public class GrassInstancedIndirect : MonoBehaviour
     private const int NUM_LODS = 4;
 
     [SerializeField] public Camera mainCamera;
+    [SerializeField] public HiZBuffer hiZBuffer;
     [SerializeField] public Mesh grassMesh;
     [SerializeField] public Vector2Int count = new Vector2Int(100, 100);
     [SerializeField] public Vector2 spacing = new Vector2(0.1f, 0.1f);
@@ -169,6 +170,18 @@ public class GrassInstancedIndirect : MonoBehaviour
         _grassInstancesVisibilityCS.SetBuffer(_grassInstancesVisibilityKernelId, "visibilityBuffer", _grassInstancesVisibilityBuffer);
         _grassInstancesVisibilityCS.SetMatrix("_UNITY_MATRIX_MVP", MVP);
         _grassInstancesVisibilityCS.SetInt("_numInstances", _numInstances);
+
+        if (hiZBuffer.IsHiZBufferAvailable())
+        {
+            _grassInstancesVisibilityCS.EnableKeyword("USE_HiZB");
+            Vector2Int hiZBufferDim = hiZBuffer.GetHiZBufferDimensions();
+            _grassInstancesVisibilityCS.SetTexture(_grassInstancesVisibilityKernelId, "_HiZMap", hiZBuffer.GetHiZBuffer());
+            _grassInstancesVisibilityCS.SetInts("_HiZTextureSize", hiZBufferDim.x, hiZBufferDim.y);
+            _grassInstancesVisibilityCS.SetInt("_HiZMaxMip", hiZBuffer.GetMipCount() - 1);
+        } else
+        {
+            _grassInstancesVisibilityCS.DisableKeyword("USE_HiZB");
+        }
 
         uint _kernelGroupDimX = 0, _kernelGroupDimY = 0, _kernelGroupDimZ = 0;
         _grassInstancesVisibilityCS.GetKernelThreadGroupSizes(_grassInstancesVisibilityKernelId, out _kernelGroupDimX, out _kernelGroupDimY, out _kernelGroupDimZ);

@@ -135,7 +135,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 163859267}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: f2134505731c6e346b3276816e50c748, type: 3}
   m_Name: 
@@ -578,6 +578,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   mainCamera: {fileID: 963194227}
+  hiZBuffer: {fileID: 963194229}
   grassMesh: {fileID: 3906130615805142554, guid: 93d3a7468bb921c479b4d42b62b1cbfb, type: 3}
   count: {x: 512, y: 512}
   spacing: {x: 0.075, y: 0.075}
@@ -653,15 +654,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 342ae2bfb5413e34e89d390f7bd99b98, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 0
+      value: -0.14
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 342ae2bfb5413e34e89d390f7bd99b98, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 3.4
+      value: 2.7
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 342ae2bfb5413e34e89d390f7bd99b98, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 6.13
+      value: -1.75
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 342ae2bfb5413e34e89d390f7bd99b98, type: 3}
       propertyPath: m_LocalRotation.w

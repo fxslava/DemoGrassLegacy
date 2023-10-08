@@ -18,7 +18,6 @@ public class TestGrassInstancesDraw
     int[] indicesData = null;
     int[] tempSumData = null;
     int[] offsetsData = null;
-    int[] argsData = null;
     int actualNumInstances = 0;
 
     [SerializeField] public int _numInstances = SCAN_GROUP_SIZE * 1024;
