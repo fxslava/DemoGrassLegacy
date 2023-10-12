@@ -1,6 +1,8 @@
 using UnityEngine;
 using UnityEngine.Profiling;
 
+
+//[ExecuteInEditMode]
 public class GrassInstancedIndirect : MonoBehaviour
 {
     private const int SCAN_GROUP_SIZE = 1024;

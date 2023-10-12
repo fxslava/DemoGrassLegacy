@@ -286,7 +286,7 @@ MeshRenderer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 515940397}
-  m_Enabled: 1
+  m_Enabled: 0
   m_CastShadows: 1
   m_ReceiveShadows: 1
   m_DynamicOccludee: 1
@@ -343,6 +343,61 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_RootOrder: 3
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &677148759
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 677148761}
+  - component: {fileID: 677148760}
+  m_Layer: 0
+  m_Name: TiledTerrain
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &677148760
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 677148759}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8441a57ade68d040bdb52fdd016fa48, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  TerrainCamera: {fileID: 963194227}
+  tileNameFormat: Output_y{0:000}_x{1:000}
+  diffuseNameFormat: SatMaps_y{0:000}_x{1:000}.png
+  tileResolution: 256
+  tileSize: 100
+  terrainOrigin: {x: -800, y: 0, z: -800}
+  grid: {x: 16, y: 16}
+  heightScale: 100
+  residentTilesNum: 9
+  tilesCacheSize: 25
+  terrainTessShader: {fileID: 4800000, guid: 328444bab3b91294bbc4e81f01a61a22, type: 3}
+--- !u!4 &677148761
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 677148759}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_RootOrder: 7
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &705507993
 GameObject:
@@ -654,15 +709,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 342ae2bfb5413e34e89d390f7bd99b98, type: 3}
       propertyPath: m_LocalPosition.x
-      value: -0.14
+      value: -0.32
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 342ae2bfb5413e34e89d390f7bd99b98, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 2.7
+      value: 2.65
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 342ae2bfb5413e34e89d390f7bd99b98, type: 3}
       propertyPath: m_LocalPosition.z
-      value: -1.75
+      value: -1.94
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 342ae2bfb5413e34e89d390f7bd99b98, type: 3}
       propertyPath: m_LocalRotation.w
