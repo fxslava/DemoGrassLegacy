@@ -123,6 +123,50 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
+--- !u!1 &68666288
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 68666290}
+  - component: {fileID: 68666289}
+  m_Layer: 0
+  m_Name: VisibilityManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &68666289
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 68666288}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3df7fb523a41daa4fbdabf8cbbf55ba9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!4 &68666290
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 68666288}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 34.37371, y: 23.387774, z: -8.831894}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_RootOrder: 8
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &163859267 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: 342ae2bfb5413e34e89d390f7bd99b98, type: 3}
@@ -633,7 +677,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   mainCamera: {fileID: 963194227}
-  hiZBuffer: {fileID: 963194229}
   grassMesh: {fileID: 3906130615805142554, guid: 93d3a7468bb921c479b4d42b62b1cbfb, type: 3}
   count: {x: 1024, y: 1024}
   spacing: {x: 0.075, y: 0.075}
@@ -649,6 +692,7 @@ MonoBehaviour:
   - {fileID: 2100000, guid: 5230961dfa420d4489eb8b4caa5551b4, type: 2}
   - {fileID: 2100000, guid: da822800e5af0ac489f9ceccc078d284, type: 2}
   - {fileID: 2100000, guid: 7cce71272aee03d4dbe5b71348b146b9, type: 2}
+  visibilityManager: {fileID: 68666289}
 --- !u!4 &1718503129
 Transform:
   m_ObjectHideFlags: 0

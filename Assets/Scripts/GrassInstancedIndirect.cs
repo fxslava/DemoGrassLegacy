@@ -12,16 +12,17 @@ public class GrassInstancedIndirect : MonoBehaviour
     [SerializeField] public Color tintColor = Color.black;
     [SerializeField] public float[] lodDistance;
     [SerializeField] public Material[] material;
+    [SerializeField] public VisibilityManager visibilityManager;
 
     private BendGrassManager _bendManager = null;
     private GrassTile _grassTile = null;
     private HiZBuffer hiZBuffer = null;
 
-    private void Start()
+    private void Awake()
     {
         _bendManager = GetComponent<BendGrassManager>();
         hiZBuffer = mainCamera.GetComponent<HiZBuffer>();
-        _grassTile = new GrassTile(mainCamera, hiZBuffer, grassMesh, transform.position, count, spacing, baseColor, tintColor, lodDistance, material);
+        _grassTile = new GrassTile(visibilityManager, mainCamera, hiZBuffer, grassMesh, transform.position, count, spacing, baseColor, tintColor, lodDistance, material);
         _grassTile.Init();
     }
 
