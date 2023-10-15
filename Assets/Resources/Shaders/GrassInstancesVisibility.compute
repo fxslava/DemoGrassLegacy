@@ -1,0 +1,137 @@
+#pragma kernel CSMain
+#pragma multi_compile _ USE_HiZB
+
+#include "InstanceData.cginc"
+
+float4x4 _UNITY_MATRIX_MVP;
+int _numInstances;
+
+float3 _cameraPos;
+float _DistanceLOD0;
+float _DistanceLOD1;
+float _DistanceLOD2;
+float _DistanceLOD3;
+
+RWStructuredBuffer<BBox> bBoxes;
+RWStructuredBuffer<int>  visibilityBuffer;
+
+int _HiZMaxMip;
+int2 _HiZTextureSize;
+Texture2D<float> _HiZMap;
+
+// Hi-Z Culling
+inline bool IsVisibleAfterOcclusionCulling(float clipMinX, float clipMaxX, float clipMinY, float clipMaxY, float clipMinZ)
+{
+    const float2 minXY = (float2(clipMinX, clipMinY) * 0.5 + 0.5) * float2(_HiZTextureSize);
+    const float2 maxXY = (float2(clipMaxX, clipMaxY) * 0.5 + 0.5) * float2(_HiZTextureSize);
+    const float2 viewSize = maxXY - minXY;
+    
+    const int LOD = clamp(ceil(log2(max(viewSize.x, viewSize.y) / 2.0f)), 0, _HiZMaxMip);
+    const float scale = exp2(-LOD);
+    const int2 offset = floor(minXY * scale);
+    
+    float minHiZdepth = 1.0f;
+    [unroll]
+    for (int y = 0; y < 2; ++y) {
+        [unroll]
+        for (int x = 0; x < 2; ++x) {
+            int2 uv = clamp(int2(offset.x + x, offset.y + y), int2(0, 0), (_HiZTextureSize - int2(1, 1)) * scale);
+            float hiZdepth = _HiZMap.Load(int3(uv, LOD)).r;
+            minHiZdepth = min(minHiZdepth, hiZdepth);
+        }
+    }
+    
+    return (1.0f - clipMinZ) > minHiZdepth;
+}
+
+inline bool IsVisibleAfterFrustumCulling(float4 clipPos)
+{
+    return (clipPos.z >  clipPos.w 
+         || clipPos.x < -clipPos.w 
+         || clipPos.x >  clipPos.w 
+         || clipPos.y < -clipPos.w 
+         || clipPos.y >  clipPos.w) 
+         ? 0 : 1;
+}
+
+inline bool IsAABBIntersects(float3 min1, float3 max1, float3 min2, float3 max2)
+{
+    return min1.x < max2.x
+       &&  max1.x > min2.x
+       &&  min1.y < max2.y
+       &&  max1.y > min2.y
+       &&  min1.z < max2.z
+       &&  max1.z > min2.z;
+}
+
+[numthreads(64,1,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    if (id.x < (uint)_numInstances)
+    {
+        BBox bbox = bBoxes[id.x];
+        
+        float3 minPos = bbox.center - bbox.extents;
+        float3 maxPos = bbox.center + bbox.extents;
+
+        float4 boxCorners[8];
+        boxCorners[0] = float4(minPos.x, minPos.y, minPos.z, 1.0);
+        boxCorners[1] = float4(minPos.x, minPos.y, maxPos.z, 1.0);
+        boxCorners[2] = float4(minPos.x, maxPos.y, minPos.z, 1.0);
+        boxCorners[3] = float4(minPos.x, maxPos.y, maxPos.z, 1.0);
+        boxCorners[4] = float4(maxPos.x, minPos.y, minPos.z, 1.0);
+        boxCorners[5] = float4(maxPos.x, minPos.y, maxPos.z, 1.0);
+        boxCorners[6] = float4(maxPos.x, maxPos.y, minPos.z, 1.0);
+        boxCorners[7] = float4(maxPos.x, maxPos.y, maxPos.z, 1.0);
+    
+        float4 clipPos = mul(_UNITY_MATRIX_MVP, boxCorners[0]);
+        bool isInFrustum = IsVisibleAfterFrustumCulling(clipPos);
+        
+        clipPos.xyz = clipPos.xyz / clipPos.w;
+        float clipMinX = clipPos.x;
+        float clipMaxX = clipPos.x;
+        float clipMinY = clipPos.y;
+        float clipMaxY = clipPos.y;
+        float clipMinZ = clipPos.z;
+        
+        [unroll]
+        for (int i = 1; i < 8; i++)
+        {
+            clipPos = mul(_UNITY_MATRIX_MVP, boxCorners[i]);
+            isInFrustum = isInFrustum || IsVisibleAfterFrustumCulling(clipPos);
+            
+            // For HiZ
+            clipPos.xyz = clipPos.xyz / clipPos.w;
+            clipMinX = min(clipPos.x, clipMinX);
+            clipMaxX = max(clipPos.x, clipMaxX);
+            clipMinY = min(clipPos.y, clipMinY);
+            clipMaxY = max(clipPos.y, clipMaxY);
+            clipMinZ = min(clipPos.z, clipMinZ);
+        }
+        
+#if defined(USE_HiZB)
+        isInFrustum = isInFrustum && IsVisibleAfterOcclusionCulling(clipMinX, clipMaxX, clipMinY, clipMaxY, clipMinZ);
+#endif
+        
+        float distance = length(_cameraPos - bbox.center);
+        int lod = -1;
+        if (isInFrustum)
+        {
+            if (distance < _DistanceLOD0) {
+                lod = 0;
+            }
+            else if (distance < _DistanceLOD1) {
+                lod = 1;
+            }
+            else if (distance < _DistanceLOD2) {
+                lod = 2;
+            }
+            else {
+                float distanceFade = 1.0f - saturate((distance - _DistanceLOD2) / (_DistanceLOD3 - _DistanceLOD2));
+                lod = (bbox.bayerThreashold < distanceFade) ? 3 : -1;
+            }
+        }
+        
+        visibilityBuffer[id.x] = lod;
+    }
+}
