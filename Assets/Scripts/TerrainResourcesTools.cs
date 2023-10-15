@@ -20,6 +20,7 @@ public class TerrainToolCalculateBorders : EditorWindow
     TextField outputText = null;
     IntegerField colNum = null;
     IntegerField rowNum = null;
+    IntegerField numLODs = null;
     Toggle processEmplace = null;
     IntegerField tileResolution = null;
 
@@ -68,156 +69,53 @@ public class TerrainToolCalculateBorders : EditorWindow
         root.Add(button);
 
         button.RegisterCallback<ClickEvent>(CalculateBorders);
+
+        numLODs = new IntegerField();
+        numLODs.label = "Num LODs";
+        numLODs.value = 3;
+        root.Add(numLODs);
+
+        Button button1 = new Button();
+        button1.name = "CalculateLODs";
+        button1.text = "Calculate LODs";
+        root.Add(button1);
+
+        button1.RegisterCallback<ClickEvent>(CalculateLODs);
     }
 
-    struct CalculateBorderJob : IJob
+    private enum TaskType
     {
-        public int    tileX;
-        public int    tileY;
-        public bool   rightNeighbor;
-        public bool   bottomNeighbor;
-        public NativeArray<byte> assetsPath;
-        public NativeArray<byte> filterText;
-        public NativeArray<byte> outputText;
-        public int    colNum;
-        public int    rowNum;
-        public bool   processEmplace;
-        public int    tileResolution;
-
-        private void LoadTile(int x, int y, out float[] heightMap)
-        {
-            string _assetsPath = Encoding.ASCII.GetString(assetsPath.ToArray());
-            string _filterText = Encoding.ASCII.GetString(filterText.ToArray());
-
-            heightMap = new float[tileResolution * tileResolution];
-
-            var tileName = string.Format(_filterText, y, x);
-            var fileName = _assetsPath + tileName + ".r32";
-
-            Stream stream = new FileStream(fileName, FileMode.Open);
-            BinaryReader br = new BinaryReader(stream);
-
-            for (int j = 0; j < tileResolution; ++j)
-            {
-                for (int i = 0; i < tileResolution; ++i)
-                {
-                    var height = br.ReadSingle();
-                    heightMap[i + j * tileResolution] = height;
-                }
-            }
-
-            br.Close();
-        }
-
-
-        private void SaveExtendedTile(int x, int y, in float[] heightMap)
-        {
-            string _assetsPath = Encoding.ASCII.GetString(assetsPath.ToArray());
-            string _filterText = Encoding.ASCII.GetString(filterText.ToArray());
-            string _outputText = Encoding.ASCII.GetString(outputText.ToArray());
-
-            var tileName = string.Format(processEmplace ? _filterText : _outputText, y, x);
-            var fileName = _assetsPath + tileName + ".r32";
-
-            Stream stream = new FileStream(fileName, FileMode.OpenOrCreate);
-            BinaryWriter br = new BinaryWriter(stream);
-
-            for (int j = 0; j <= tileResolution; ++j)
-            {
-                for (int i = 0; i <= tileResolution; ++i)
-                {
-                    var height = heightMap[i + j * (tileResolution + 1)];
-                    br.Write(height);
-                }
-            }
-
-            br.Close();
-        }
-
-        private void CalculateTileWithBorders(int x, int y, bool dX, bool dY)
-        {
-            float[] baseHeight = new float[tileResolution * tileResolution];
-            float[] heightdX = new float[tileResolution * tileResolution];
-            float[] heightdY = new float[tileResolution * tileResolution];
-            float[] heightdXdY = new float[tileResolution * tileResolution];
-
-            LoadTile(x, y, out baseHeight);
-
-            if (dX)
-            {
-                LoadTile(x + 1, y, out heightdX);
-            }
-
-            if (dY)
-            {
-                LoadTile(x, y + 1, out heightdY);
-            }
-
-            if (dX && dY)
-            {
-                LoadTile(x + 1, y + 1, out heightdXdY);
-            }
-
-            float[] heightMap = new float[(tileResolution + 1) * (tileResolution + 1)];
-
-            for (int j = 0; j < tileResolution; ++j)
-            {
-                for (int i = 0; i < tileResolution; ++i)
-                {
-                    heightMap[i + j * (tileResolution + 1)] = baseHeight[i + j * tileResolution];
-                }
-            }
-
-            if (dX)
-            {
-                for (int i = 0; i < tileResolution; ++i)
-                {
-                    heightMap[i * (tileResolution + 1) + tileResolution] = heightdX[i * tileResolution];
-                }
-            }
-
-            if (dY)
-            {
-                for (int i = 0; i < tileResolution; ++i)
-                {
-                    heightMap[i + tileResolution * (tileResolution + 1)] = heightdY[i];
-                }
-            }
-
-            if (dX && dY)
-            {
-                heightMap[tileResolution * (tileResolution + 1) + tileResolution] = heightdXdY[0];
-            }
-
-            SaveExtendedTile(x, y, heightMap);
-        }
-
-        public void Execute()
-        {
-            CalculateTileWithBorders(tileX, tileY, rightNeighbor, bottomNeighbor);
-        }
+        ProcessBorders,
+        ProcessLODs,
+        Idle
     }
 
+    private TaskType currentTask = TaskType.Idle;
     private NativeArray<JobHandle> _calculateBordersJobs00;
     private NativeArray<JobHandle> _calculateBordersJobs01;
     private NativeArray<JobHandle> _calculateBordersJobs10;
     private NativeArray<JobHandle> _calculateBordersJobs11;
-    private JobHandle[,] _allJobHandles;
-    private bool[,] _isCompletedJob;
     private NativeArray<byte>[,] _assetsPath;
     private NativeArray<byte>[,] _filterText;
     private NativeArray<byte>[,] _outputText;
-    private bool _isJobsStarted = false;
+    private JobHandle[,] _allJobHandles;
+    private bool[,] _isCompletedJob;
 
     private void CalculateBorders(ClickEvent evt)
     {
+        if (currentTask != TaskType.Idle)
+        {
+            return;
+        }
+
+        currentTask = TaskType.ProcessBorders;
+
         int numRows = rowNum.value;
         int numCols = colNum.value;
 
         _assetsPath = new NativeArray<byte>[numRows, numCols];
         _filterText = new NativeArray<byte>[numRows, numCols];
         _outputText = new NativeArray<byte>[numRows, numCols];
-        _isJobsStarted = true;
 
         _isCompletedJob = new bool[numRows, numCols];
         _allJobHandles = new JobHandle[numRows, numCols];
@@ -289,9 +187,51 @@ public class TerrainToolCalculateBorders : EditorWindow
         }
     }
 
+    private void CalculateLODs(ClickEvent evt)
+    {
+        if (currentTask != TaskType.Idle)
+        {
+            return;
+        }
+
+        currentTask = TaskType.ProcessLODs;
+
+        int numRows = rowNum.value;
+        int numCols = colNum.value;
+
+        _assetsPath = new NativeArray<byte>[numRows, numCols];
+        _filterText = new NativeArray<byte>[numRows, numCols];
+        _allJobHandles = new JobHandle[numRows, numCols];
+        _isCompletedJob = new bool[numRows, numCols];
+
+        for (int i = 0; i < numRows; i++)
+        {
+            for (int j = 0; j < numCols; j++)
+            {
+                _assetsPath[i, j] = new NativeArray<byte>(Encoding.ASCII.GetBytes(assetsPath.value), Allocator.TempJob);
+                _filterText[i, j] = new NativeArray<byte>(Encoding.ASCII.GetBytes(filterText.value), Allocator.TempJob);
+                _isCompletedJob[i, j] = false;
+
+                var _job = new CalculateLODsJob()
+                {
+                    tileX = i,
+                    tileY = j,
+                    assetsPath = _assetsPath[i, j],
+                    filterText = _filterText[i, j],
+                    colNum = colNum.value,
+                    rowNum = rowNum.value,
+                    numLODs = numLODs.value,
+                    tileResolution = tileResolution.value
+                };
+
+                _allJobHandles[i,j] = _job.Schedule();
+            }
+        }
+    }
+
     private void Awake()
     {
-        _isJobsStarted = false;
+        currentTask = TaskType.Idle;
     }
 
     private void Update()
@@ -299,7 +239,7 @@ public class TerrainToolCalculateBorders : EditorWindow
         int numRows = rowNum.value;
         int numCols = colNum.value;
 
-        if (_isJobsStarted)
+        if (currentTask == TaskType.ProcessBorders)
         {
             for (int i = 0; i < numRows; i++)
             {
@@ -340,7 +280,46 @@ public class TerrainToolCalculateBorders : EditorWindow
                         _outputText[i, j].Dispose();
                     }
                 }
-                _isJobsStarted = false;
+                currentTask = TaskType.Idle;
+            }
+        }
+
+        if (currentTask == TaskType.ProcessLODs)
+        {
+            for (int i = 0; i < numRows; i++)
+            {
+                for (int j = 0; j < numCols; j++)
+                {
+                    if (!_isCompletedJob[i, j] && _allJobHandles[i, j].IsCompleted)
+                    {
+                        _allJobHandles[i, j].Complete();
+                        _isCompletedJob[i, j] = true;
+                        Debug.Log(string.Format("Tile x{0:000}, y{1:000} processed.", i, j));
+                    }
+                }
+            }
+
+            bool allCompleted = true;
+            for (int i = 0; i < numRows; i++)
+            {
+                for (int j = 0; j < numCols; j++)
+                {
+                    allCompleted = allCompleted && _isCompletedJob[i, j];
+                }
+            }
+
+
+            if (allCompleted)
+            {
+                for (int i = 0; i < numRows; i++)
+                {
+                    for (int j = 0; j < numCols; j++)
+                    {
+                        _assetsPath[i, j].Dispose();
+                        _filterText[i, j].Dispose();
+                    }
+                }
+                currentTask = TaskType.Idle;
             }
         }
     }
